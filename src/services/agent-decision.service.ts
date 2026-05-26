@@ -18,4 +18,5 @@ export async function decideTool(query: string) {
   logger("No tool required");
 
   return null;
+
 }

@@ -1,51 +1,63 @@
-import { generateResponse } from "../services/ollama.service.js";
 import { decideTool } from "../services/agent-decision.service.js";
-import { redisClient } from "../services/redis.service.js";
-import { tools } from "../tools/tool-registry.js";
+
+import { webSearch } from "../tools/web-search.tool.js";
+
+import { generateResponse } from "../services/llm.service.js";
+
+import {
+  getCachedResponse,
+  saveResponseToCache,
+} from "../services/redis.service.js";
+
 import { logger } from "../utils/logger.js";
 
 export async function researchAgent(query: string) {
+  logger(`Analyzing query: ${query}`);
+
   const startTime = Date.now();
 
-  const cachedResponse = await redisClient.get(query);
+  // Check Redis cache first
+  const cachedResponse = await getCachedResponse(query);
 
   if (cachedResponse) {
-    const endTime = Date.now();
-
     logger("Returning response from Redis cache");
-    logger(`Response Time: ${endTime - startTime} ms`);
+
+    logger(`Response Time: ${Date.now() - startTime} ms`);
 
     return cachedResponse;
   }
 
+  // Decide if tool is required
   const selectedTool = await decideTool(query);
 
-  let toolResults = "";
+  let finalPrompt = query;
 
-  if (selectedTool) {
-    toolResults = await tools[selectedTool](query);
+  // Execute tool if needed
+  if (selectedTool === "webSearch") {
+    logger(`Searching web for: ${query}`);
+
+    const webResults = await webSearch(query);
+
+    finalPrompt = `
+User Question:
+${query}
+
+Web Search Results:
+${webResults}
+
+Based on the above information, generate a helpful answer.
+`;
   }
 
-  const finalPrompt = `
-    User Question:
-    ${query}
+  // Generate AI response
+  const response : any = await generateResponse(finalPrompt);
 
-    Tool Results:
-    ${toolResults}
-
-    Using the available information, provide a helpful response.
-  `;
-
-  const response = await generateResponse(finalPrompt);
-await redisClient.set(query, response);
-
-logger(`Redis Key Saved: ${query}`);
-logger(`Redis Value Saved: ${response.substring(0, 100)}...`);
-
-  const endTime = Date.now();
+  // Save response in Redis
+  await saveResponseToCache(query, response);
 
   logger("Saved response to Redis");
-  logger(`LLM Response Time: ${endTime - startTime} ms`);
+
+  logger(`LLM Response Time: ${Date.now() - startTime} ms`);
 
   return response;
 }

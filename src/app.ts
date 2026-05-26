@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
+import "dotenv/config";
 import { chatController } from "./controllers/chat.controller.js";
 import { connectRedis } from "./services/redis.service.js";
 
