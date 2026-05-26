@@ -1,32 +1,33 @@
-import { createClient } from "redis";
+import { Redis } from "@upstash/redis";
 
 import { logger } from "../utils/logger.js";
 
-const redisClient = createClient({
-  url: process.env.REDIS_URL,
-});
-
-redisClient.on("error", (err) => {
-  console.error("Redis Client Error", err);
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
 export async function connectRedis() {
-  await redisClient.connect();
+  try {
+    await redis.ping();
 
-  logger("Redis Connected");
+    logger("Redis Connected");
+  } catch (error) {
+    console.error("Redis Connection Error:", error);
+  }
 }
 
 export async function getCachedResponse(
   query: string
 ) {
-  return await redisClient.get(query);
+  return await redis.get(query);
 }
 
 export async function saveResponseToCache(
   query: string,
   response: string
 ) {
-  await redisClient.set(query, response);
+  await redis.set(query, response);
 
   logger(`Redis Key Saved: ${query}`);
 
